@@ -3,6 +3,9 @@ import Burger from '../../components/Burger/Burger';
 import BuildControls from '../../components/Burger/BuildControls/BuildControls';
 import Modal from '../../components/UI/Modal/Modal';
 import OrderSummary from '../../components/Burger/OrderSummary/OrderSummary';
+import Spinner from '../../components/UI/Spinner/Spinner';
+import axios from '../../axios-loader';
+import withErrorHandler from '../../hoc/withErrorHandler/withErrorHandler';
 
 const INGREDIENT_PRICES = {
     salad: 5,
@@ -13,15 +16,26 @@ const INGREDIENT_PRICES = {
 
 class BurderBuilder extends Component {
     state = {
-        ingredients: {
-            salad: 0,
-            bacon: 0,
-            cheese: 0,
-            meat: 0
-        },
+        ingredients: null,
         totalPrice: 15,
         purchaseable: false,
-        purchasing: false
+        purchasing: false,
+        loading: false,
+        error: false
+    }
+
+    componentDidMount () {
+        axios.get('/ingredients.json')
+        .then(response => {
+            this.setState({
+                ingredients: response.data
+            })
+        })
+        .catch(error => {
+            this.setState({
+                error: true
+            });
+        });;
     }
 
     updatePurchaseable (ingredients) {
@@ -45,7 +59,35 @@ class BurderBuilder extends Component {
     }
 
     purchaseContinueHandler = () => {
-        alert('Continued');
+        this.setState({
+            loading: true
+        });
+        const orderPackage = {
+            ingredients: this.state.ingredients,
+            deliveryMethod: 'fast',
+            customer: {
+                address: {
+                    country: 'Zimbabwe',
+                    street: 'some street',
+                    home: 'large'
+                },
+                name: 'Tim Mostert',
+                email: 'some@email.co'
+            }
+        }
+        axios.post('/orders.json', orderPackage)
+            .then(response => {
+                this.setState({
+                    loading: false,
+                    purchasing: false
+                });
+            })
+            .catch(error => {
+                this.setState({
+                    loading: false,
+                    purchasing: false
+                });
+        });
     }
 
     addIngredientHandler = (type) => {
@@ -94,27 +136,42 @@ class BurderBuilder extends Component {
         for (let key in disableInfo) {
             disableInfo[key] = disableInfo[key] <= 0;
         }
+        let orderSummary = null;
+        let burger = this.state.error ? <p>Ingredients can't be loaded</p> : <Spinner />;
+        if(this.state.ingredients) {
+            orderSummary = (
+                <OrderSummary 
+                            ingredients={this.state.ingredients}
+                            clickedCancel={this.purchaseHandler}
+                            clickedContinue={this.purchaseContinueHandler}
+                            totalPrice={this.state.totalPrice}
+                        />
+            );
+            burger = (
+                <Fragment>
+                    <Burger ingredients={this.state.ingredients} />
+                    <BuildControls
+                        ingredientAdded={this.addIngredientHandler}
+                        ingredientRemoved={this.removerIngredientHandler}
+                        disabled={disableInfo}
+                        purchaseable={this.state.purchaseable}
+                        price={this.state.totalPrice}
+                        clicked={this.purchaseHandler} />
+                </Fragment>
+            );
+        }
+        if(this.state.loading) {
+            orderSummary = <Spinner />;
+        }
         return (
             <Fragment>
                 <Modal show={this.state.purchasing} modalClosed={this.purchaseHandler} >
-                    <OrderSummary 
-                        ingredients={this.state.ingredients}
-                        clickedCancel={this.purchaseHandler}
-                        clickedContinue={this.purchaseContinueHandler}
-                        totalPrice={this.state.totalPrice}
-                    />
+                    {orderSummary}
                 </Modal>
-                <Burger ingredients={this.state.ingredients} />
-                <BuildControls
-                    ingredientAdded={this.addIngredientHandler}
-                    ingredientRemoved={this.removerIngredientHandler}
-                    disabled={disableInfo}
-                    purchaseable={this.state.purchaseable}
-                    price={this.state.totalPrice}
-                    clicked={this.purchaseHandler} />
+                {burger}
             </Fragment>
         );
     }
 }
 
-export default BurderBuilder;
+export default withErrorHandler(BurderBuilder);
